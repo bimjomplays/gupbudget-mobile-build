@@ -39,6 +39,13 @@ targets:
         UIViewControllerBasedStatusBarAppearance: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
+        # pairing: the app scans the QR code the PC shows (the camera picture never leaves the phone). No URL scheme
+        # is registered (CFBundleURLTypes): only this scanner reads pairing links, so no website can push one.
+        NSCameraUsageDescription: >-
+          GupBudget uses the camera only to scan the pairing code your PC shows. Nothing is recorded or sent anywhere.
+        # app lock and money-plan decisions (iOS checks the face; the app only hears "passed" or "not")
+        NSFaceIDUsageDescription: >-
+          GupBudget uses Face ID to unlock the app and to confirm each budget decision you make on your iPhone.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.gupbudget.mobile
