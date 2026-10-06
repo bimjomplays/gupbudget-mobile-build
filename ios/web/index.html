@@ -1,0 +1,20 @@
+<!doctype html>
+<!-- GupBudget iPhone app UI. scripts/build-mobile-web.mjs copies this page into ios/web/ next to the bundle it builds
+     (app.js = mobile/web/app.mjs + the shared app/web modules as ONE classic script, app.css = the themes + mobile.css):
+     the iOS shell loads it from file://, where ES modules can't load. Opens in a desktop browser too. -->
+<html lang="en" data-theme="graphite">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="format-detection" content="telephone=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:">
+<title>GupBudget</title>
+<link rel="stylesheet" href="app.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div id="app"></div>
+<noscript>GupBudget needs JavaScript.</noscript>
+</body>
+</html>

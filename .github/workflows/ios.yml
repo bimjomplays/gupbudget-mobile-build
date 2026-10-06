@@ -1,0 +1,57 @@
+# Builds the GupBudget iPhone app into an unsigned IPA on a GitHub-hosted Mac. Install it with iloader (Import IPA),
+# which signs it with your Apple ID.
+#  - every push that touches the app: IPA as a workflow artifact "GupBudget" (testing builds)
+#  - a tag like  ios-v0.1.0  : the IPA is also attached to a GitHub Release (kept versions)
+# Only ios/ and this file trigger it. The job runs only in a public repo: macOS minutes are free there, so the private
+# development repo skips it and the public build copy (scripts/publish-public.sh) does the build. ios/web/ (the built
+# web UI) only exists in that copy.
+name: ios
+on:
+  push:
+    branches: ["**"]
+    tags: ["ios-v*"]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  ipa:
+    if: github.event.repository.private == false
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the built web UI is there
+        run: |
+          for f in web/index.html web/app.js web/app.css; do test -s "$f" || { echo "$f missing: publish with scripts/publish-public.sh"; exit 1; }; done
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build
+        run: |
+          xcodebuild -project GupBudget.xcodeproj -target GupBudget -configuration Release -sdk iphoneos \
+            SYMROOT="$PWD/build" CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build.log 2>&1 \
+            || { grep -E "error:" build.log | head -60; tail -30 build.log; exit 1; }
+      - name: Package
+        run: |
+          app=build/Release-iphoneos/GupBudget.app
+          for f in web/index.html web/app.js web/app.css; do test -f "$app/$f" || { echo "$f missing from the app"; exit 1; }; done
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = app.gupbudget.mobile
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")" = "${{ github.run_number }}"
+          mkdir Payload
+          cp -R "$app" Payload/
+          zip -qry GupBudget.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GupBudget
+          path: ios/GupBudget.ipa
+      - name: Attach to a release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" GupBudget.ipa --title "$GITHUB_REF_NAME (build ${{ github.run_number }})" \
+            --notes "Unsigned IPA. Install with iloader (Import IPA)." \
+            || gh release upload "$GITHUB_REF_NAME" GupBudget.ipa --clobber
