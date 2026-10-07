@@ -100,10 +100,21 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     @objc private func sceneWillDeactivate() {
         // a Face ID prompt makes the app inactive for a moment too; the owner hasn't left then
-        if !bridge.auth.busy { cover.isHidden = false }
+        guard bridge.auth.busy else {
+            cover.isHidden = false
+            return
+        }
+        // ...but the owner can also swipe to the app switcher with the prompt up: if the app is still inactive after
+        // the prompt's own blink, cover the page (the system sheet draws above it, so the prompt looks the same)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.promptGrace) { [weak self] in
+            guard let self, self.view.window?.windowScene?.activationState == .foregroundInactive else { return }
+            self.cover.isHidden = false
+        }
     }
 
     @objc private func sceneDidEnterBackground() {
+        // the cover first (the switcher's picture is taken when this returns), then the lock, which also ends a
+        // Face ID check still on screen: a decision waiting on it comes back "locked" and sends nothing
         cover.isHidden = false
         bridge.lock()
     }
@@ -111,6 +122,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     @objc private func sceneDidActivate() {
         reveal()
     }
+
+    /// how long the app may stay inactive under a Face ID prompt before the page is covered anyway
+    private static let promptGrace = 0.6
 
     /// In front with a loaded page: let the page take in the lock state, give it a frame to draw it, then lift the
     /// cover and (still locked) bring up Face ID.

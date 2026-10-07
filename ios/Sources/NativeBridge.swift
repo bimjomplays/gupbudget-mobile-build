@@ -527,7 +527,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                                       preferredStyle: .alert)
         let lastAddress = typedAddress
         alert.addTextField { f in
-            f.placeholder = "PC address (https://…:10001)"
+            f.placeholder = "PC address (https://…:10002)"
             f.text = lastAddress
             f.autocorrectionType = .no
             f.autocapitalizationType = .none
@@ -558,7 +558,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         typedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let base = PairLink.typedBaseURL(address) else {
             return reject("", title: PairLink.Problem.badAddress.title,
-                          message: "Type the PC address exactly as Settings › Phones shows it on your PC (your Tailscale name, then :10001).")
+                          message: "Type the PC address exactly as Settings › Phones shows it on your PC (your Tailscale name, then :10002).")
         }
         guard let code = PairLink.pairingCode(typed) else {
             return reject("", title: "That isn't a pairing code", message: "The code has 8 letters and digits, like K7QM-3XRT.")
