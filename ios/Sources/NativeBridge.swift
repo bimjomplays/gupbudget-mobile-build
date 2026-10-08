@@ -95,8 +95,10 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         // a quick action / App Shortcut arrived (LaunchActions.swift): while locked it just waits (the page asks for it
         // once it's unlocked and drawn); unlocked, the page is told to look
         NotificationCenter.default.addObserver(forName: .gupLaunchAction, object: nil, queue: .main) { [weak self] _ in
-            guard let self, !self.locked else { return }
-            self.emit("launch", [:])
+            Task { @MainActor in
+                guard let self, !self.locked else { return }
+                self.emit("launch", [:])
+            }
         }
     }
 
@@ -135,7 +137,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(nil, nil)
         case "launch.take":
             // the screen a quick action / App Shortcut asked for (not while locked: the check above refuses it)
-            replyHandler(["action": PendingLaunch.shared.take()?.rawValue ?? NSNull()], nil)
+            let action: Any = PendingLaunch.shared.take()?.rawValue ?? NSNull()
+            replyHandler(["action": action], nil)
         case "pair.start":
             startScanning { replyHandler($0, nil) }
         case "pair.stop":
