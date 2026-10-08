@@ -39,6 +39,20 @@ targets:
         UIViewControllerBasedStatusBarAppearance: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         ITSAppUsesNonExemptEncryption: false
+        # Home Screen quick actions on the app icon: each only opens the app on that screen once it's unlocked (LaunchActions.swift)
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: app.gupbudget.mobile.quick.log
+            UIApplicationShortcutItemTitle: Log a spend
+            UIApplicationShortcutItemIconSymbolName: square.and.pencil
+          - UIApplicationShortcutItemType: app.gupbudget.mobile.quick.ask
+            UIApplicationShortcutItemTitle: Ask Finance
+            UIApplicationShortcutItemIconSymbolName: sparkles
+          - UIApplicationShortcutItemType: app.gupbudget.mobile.quick.groceries
+            UIApplicationShortcutItemTitle: Left for groceries?
+            UIApplicationShortcutItemIconSymbolName: cart
+          - UIApplicationShortcutItemType: app.gupbudget.mobile.quick.needs
+            UIApplicationShortcutItemTitle: Needs a look
+            UIApplicationShortcutItemIconSymbolName: questionmark.circle
         # pairing: the app scans the QR code the PC shows (the camera picture never leaves the phone). No URL scheme
         # is registered (CFBundleURLTypes): only this scanner reads pairing links, so no website can push one.
         NSCameraUsageDescription: >-

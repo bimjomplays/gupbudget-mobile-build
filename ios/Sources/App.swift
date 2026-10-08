@@ -18,13 +18,25 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
-    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: scene)
         window.overrideUserInterfaceStyle = .dark
         window.rootViewController = WebViewController()
         window.makeKeyAndVisible()
         self.window = window
+        // opened from a Home Screen quick action (cold start): the action waits until the app is unlocked
+        if let item = connectionOptions.shortcutItem, let action = LaunchAction(shortcut: item) {
+            PendingLaunch.shared.set(action)
+        }
+    }
+
+    /// a quick action picked while the app was already running (in the background)
+    func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem,
+                     completionHandler: @escaping (Bool) -> Void) {
+        guard let action = LaunchAction(shortcut: shortcutItem) else { return completionHandler(false) }
+        PendingLaunch.shared.set(action)
+        completionHandler(true)
     }
 }
 
