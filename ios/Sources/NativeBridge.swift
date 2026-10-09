@@ -41,6 +41,12 @@ private struct Decision {
 /// from the check's own time (on the PC's clock). The page can't make up, reuse or skip a confirmation: there is no
 /// way for it to hand one in.
 ///
+/// The owner's own risky changes (#371: deleting, a transaction's amount / date / account, transfers, closing an account,
+/// restoring a backup) work the other way round: the PC decides. It answers such a request with 428
+/// "confirmation_required" and a hint {key, action, title}; the bridge then runs Face ID (or the passcode) for exactly
+/// that title and sends the SAME body again with a confirm block it makes itself. Any `confirm` the page puts in a
+/// request is taken out first, so the page can't hand one in here either.
+///
 /// ops: hello · request {id, method, path, query, body, timeoutMs, title} · cancel {id} · pair.start · pair.stop ·
 ///      pair.torch {on} · pair.enter · pair.forget · settings · unlock {passcode} · lock.peek
 /// events: pair {state: checking | paired | failed, ...} ·
@@ -364,6 +370,15 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         let timeout = max(1, min(60, ((a["timeoutMs"] as? Double) ?? 15000) / 1000))
 
         let title = String(((a["title"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(120))
+        let isDecision = Self.decision(method: method, path: path, body: body, title: title) != nil
+        // The owner's own risky changes (the PC says which: a 428 with a hint, handled below): the page can't hand in a
+        // confirm block of its own, so anything it sent is taken out; only the one made here after Face ID goes.
+        if method == "POST", !isDecision, let b = body, let json = try? JSONSerialization.jsonObject(with: b) as? [String: Any],
+           json["confirm"] != nil {
+            var plain = json
+            plain.removeValue(forKey: "confirm")
+            body = try? JSONSerialization.data(withJSONObject: plain)
+        }
         if let d = Self.decision(method: method, path: path, body: body, title: title) {
             switch d {
             case .failure(let local): return local.reply
@@ -406,7 +421,47 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             }
         }
         if rotating, out.status == 200 { return keepRotatedToken(out.json, for: p) }
+        if out.status == 428, !isDecision, method == "POST", let sent = body, let hint = Self.riskHint(out.json),
+           let now = pairing, now.baseURL == p.baseURL {
+            return await retryWithFaceID(hint: hint, base: now.baseURL, token: now.pendingToken ?? now.token, path: path,
+                                         body: sent, timeout: timeout)
+        }
         return out.reply
+    }
+
+    // MARK: - The owner's own risky changes (the PC decides which; docs/phone-api.md "Risky changes")
+
+    /// What a 428 from the PC asks for: confirm this exact request. `key` is bound to the path and the body on the PC.
+    private struct RiskHint {
+        let key: String
+        let action: String
+        let title: String
+    }
+
+    private static func riskHint(_ json: [String: Any]?) -> RiskHint? {
+        guard let error = json?["error"] as? [String: Any], error["code"] as? String == "confirmation_required",
+              let c = error["confirm"] as? [String: Any], let key = c["key"] as? String, key.hasPrefix("risk:"),
+              isItemId(key), let action = c["action"] as? String, isSwitchKey(action) else { return nil }
+        let raw = (c["title"] as? String) ?? ""
+        let plain = String(String.UnicodeScalarView(raw.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
+        return RiskHint(key: key, action: action, title: String(plain.prefix(100)))
+    }
+
+    /// Face ID (or the passcode) for exactly what the PC named, then the same request again with the confirm block made
+    /// here. Nothing else changes: the body is the one that was just refused.
+    private func retryWithFaceID(hint: RiskHint, base: URL, token: String, path: String, body: Data, timeout: Double) async -> [String: Any] {
+        if clockOffset == nil || Date().timeIntervalSince(clockOffset!.learned) > 600 {
+            _ = await send(base: base, token: token, method: "GET", path: "/v1/status", query: [:], body: nil, timeout: 10)
+        }
+        if Task.isCancelled { return ["error": "aborted"] }
+        let d = Decision(key: hint.key, action: hint.action, reason: hint.title.isEmpty ? "Confirm this change" : hint.title,
+                         body: (try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:], sendsConfirm: true)
+        switch await confirm(d) {
+        case .refused(let why): return ["error": why]
+        case .body(let checked):
+            if Task.isCancelled { return ["error": "aborted"] }
+            return await send(base: base, token: token, method: "POST", path: path, query: [:], body: checked, timeout: timeout).reply
+        }
     }
 
     /// POST /v1/auth/rotate answered with a new token: keep it in the Keychain as pending and give the page the
